@@ -1,3 +1,4 @@
+
 // wemos esp32-s2 mini board
 #pragma once
 #include <Arduino.h>
@@ -223,15 +224,15 @@ void MotorUpdate(){
 //
 void handleWebMotorControl() {
   // 🔧 Тут згодом реалізації логіки веб-керування двигуном
-  if (motorSpeed > 0 && forwardflag != 1 ) { 
+  if (webMotorSpeed > 0 && forwardflag != 1 ) { 
     MotorForward();
     DEBUG_PRINTLN(" WEB ВПЕРЕД!");
- } else if (motorSpeed < 0 && reverseflag != 1) { 
+ } else if (webMotorSpeed < 0 && reverseflag != 1) { 
     MotorReverse();
     DEBUG_PRINTLN("WEB НАЗАД");
     }
 
-    targetSpeed = abs(motorSpeed);
+    targetSpeed = abs(webMotorSpeed);
     MotorUpdate();
  }
 
@@ -262,7 +263,7 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client,
       currentServoAngle = doc["servoX"] | currentServoAngle;
       
       // Отримуємо значення для мотору (наприклад, для керування швидкістю)
-      int motorSpeed = doc["servoY"] | 0;  // якщо ключ відсутній, залишаємо 0
+      webMotorSpeed = doc["servoY"] | 0;  // якщо ключ відсутній, залишаємо 0
       
       // Оновлюємо прапорець керування
       motorControlIntercepted = doc["intercepted"] | false;
@@ -470,7 +471,7 @@ void handleWEB(AsyncWebServerRequest *request) {
 //
 void handleSettings(AsyncWebServerRequest *request) {
   String page = "<h1>Налаштування</h1>";
-  page += "<form action='/save' method="POST">";
+  page += "<form action='/save' method='POST'>";
   
       // Поля для введення значень змінних
   page += "Настройка серво: <input name='servang' type='number' step='0.1' value='" + String(currentServoAngle, 1) + "'><br>";
