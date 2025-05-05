@@ -293,67 +293,169 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client,
 
 // === HTTP-обробник головної сторінки (WebSocket використовуємо замість HTTP update) ===
 void handleWEB(AsyncWebServerRequest *request) {
-  String page = "<!DOCTYPE html><html><head><meta charset='UTF-8'>";
+  String page = "<!DOCTYPE html><html lang='uk'><head><meta charset='UTF-8'>";
   page += "<meta name='viewport' content='width=device-width, initial-scale=1.0'>";
+  page += "<title>ESP32 Керування Рулем</title>";
   page += "<style>";
-  page += "body { font-family: sans-serif; text-align: center; padding: 10px; }";
-  page += "input[type=range] { width: 90%; }";
-  page += "button { width: 90%; padding: 10px; margin: 5px; font-size: 16px; }";
+  page += "body { margin: 0; font-family: sans-serif; background: #f5f5f5; }";
+  
+  // Верхня панель
+  page += "header { background: #333; color: white; padding: 10px 20px; }";
+  page += "#titleBar { text-align: center; margin-bottom: 10px; }";
+  page += "#titleBar h1 { margin: 0; font-size: 1.8em; }";
+  page += "#statusBar { display: flex; justify-content: space-between; align-items: center; }";
+  page += "#statusLeft { font-size: 0.9em; }";
+  page += "#statusRight button { width: 40px; height: 40px; border: none; border-radius: 50%; background: #555; color: white; font-size: 1.5em; cursor: pointer; }";
+  
+  // Ряд з кнопками
+  page += "#controlRow { display: flex; justify-content: space-between; padding: 10px 20px; background: #eee; }";
+  page += "#controlRow button { width: 45px; height: 45px; border: none; border-radius: 50%; background: #007BFF; color: white; font-size: 1.5em; cursor: pointer; }";
+  page += "#btnLight { background: #ffcc00; font-size: 1.8em; }";
+  
+  // Ряд із слайдером
+  page += "#sliderRow { text-align: center; margin: 10px 20px; }";
+  page += "#sliderRow label { font-weight: bold; display: block; margin-bottom: 20px; }";
+  page += "#sliderRow input[type='range'] { width: 80%; }";
+  
+  // Джойстик: квадратна область + круглий фон
+  page += "#joystickContainer { position: relative; width: 320px; height: 320px; margin: 180px auto; }";
+  page += "#joystickCircle { position: absolute; top: 50%; left: 50%; width: 400px; height: 400px; margin-left: -200px; margin-top: -200px; background: #ddd; border-radius: 50%; z-index: 0; pointer-events: none; }";
+  page += "#joystickDot { position: absolute; width: 30px; height: 30px; background: #007BFF; border-radius: 50%; top: 50%; left: 50%; margin-left: -15px; margin-top: -15px; z-index: 10; pointer-events: none; }";
+  
+  // Overlay кнопки для блокування руля та режиму серви
+  page += ".overlay-btn { position: absolute; width: 60px; height: 60px; border: none; border-radius: 50%; background: #007BFF; color: white; font-size: 1.5em; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 11; pointer-events: auto; }";
+  page += ".left-btn { top: -75px; left: -15px; }";
+  page += ".right-btn { top: -75px; right: -15px; }";
+  
   page += "</style></head><body>";
-
-  // Відображення поточного режиму серво та кута
-  page += "<h2>Режим серво: " + String(servoMode) + "</h2>";
-  page += "<p>Кут Руля: <span id='angle'>" + String(currentServoAngle) + "</span></p>";
-
-  // Елемент для керування (джойстик)
-  page += "<h3>Джойстик</h3>";
-  page += "X: <input type='range' id='x' min='" + String(servoMinAngle) + "' max='" + String(servoMaxAngle) + "' value='" + String(neutralServoAngle) + "'><br>";
-  page += "Y: <input type='range' id='y' min='-100' max='100' value='0'><br>";
-
-  // Кнопки управління
-  page += "<h3>Управління</h3>";
-  page += "<button onclick='toggleControl()' id='btnControl'>Перехопити управління</button>";
-  page += "<button onclick='toggleHold()' id='btnHold'>Утримувати 0</button>";
-  page += "<button onclick='toggleLight()' id='btnLight'>Світло</button>";
-  page += "<button onclick='toggleMode()' id='btnMode'>Тумблер</button>";
-
-  // Кнопка для сторінки налаштувань (HTTP-обробник налаштувань залишається незмінним)
-  page += "<br><br><a href='/settings'><button>Налаштування ⚙️</button></a>";
-
-  // JavaScript-код: встановлення WebSocket‑з’єднання та відправка команд
+  
+  // Верхня панель: заголовок, статуса
+  page += "<header>";
+  page += "  <div id='titleBar'><h1>ESP32 Керування Рулем</h1></div>";
+  page += "  <div id='statusBar'>";
+  page += "    <div id='statusLeft'>Кут руля: <span id='angleDisplay'>90</span>°<br>Швидкість: <span id='speedDisplay'>0</span></div>";
+  page += "    <div id='statusRight'><button id='settingsButton' title='Налаштування'>⚙️</button></div>";
+  page += "  </div>";
+  page += "</header>";
+  
+  // Ряд з кнопками управління
+  page += "<div id='controlRow'>";
+  page += "  <button id='btnControl' onclick='toggleControl()'>✋</button>";
+  page += "  <button id='btnLight' onclick='toggleLight()'>💡</button>";
+  page += "</div>";
+  
+  // Ряд із слайдером
+  page += "<div id='sliderRow'>";
+  page += "  <label for='multiplierSlider'>Макс швидкість (множник Y):</label>";
+  page += "  <input type='range' id='multiplierSlider' min='0.5' max='1' step='0.05' value='1'>";
+  page += "</div>";
+  
+  // Джойстик
+  page += "<div id='joystickContainer'>";
+  page += "  <div id='joystickCircle'></div>";
+  page += "  <div id='joystickDot'></div>";
+  page += "  <button id='lockButton' class='overlay-btn left-btn' title='Блокування руля'>🔓</button>";
+  page += "  <button id='modeButton' class='overlay-btn right-btn' title='Режим серви'>🚙</button>";
+  page += "</div>";
+  
+  // JavaScript-код: WebSocket та обробка подій
   page += "<script>";
+  // Основні змінні
+  page += "const minAngle = 45, maxAngle = 135;";
+  page += "let angle = 90, speed = 0, multiplier = 1;";
+  page += "const angleDisplay = document.getElementById('angleDisplay');";
+  page += "const speedDisplay = document.getElementById('speedDisplay');";
+  page += "function updateDisplay() { angleDisplay.textContent = angle; speedDisplay.textContent = speed; }";
+  page += "updateDisplay();";
+  
+  // WebSocket-з’єднання
   page += "let intercepted = false, mode = 'SERVO_SOFT', light = false;";
-
   page += "let socket = new WebSocket('ws://' + window.location.hostname + '/ws');";
   page += "socket.onopen = function(){ console.log('WebSocket з’єднання встановлено'); };";
   page += "socket.onmessage = function(event){ console.log('Отримано WS повідомлення: ' + event.data); };";
   page += "socket.onerror = function(error){ console.error('WS помилка', error); };";
   page += "socket.onclose = function(){ console.log('WebSocket з’єднання закрито'); };";
-
-  // Функція для відправки команд через WebSocket у форматі JSON
+  
+  // Функція надсилання команд через WS
   page += "function send() {";
-  page += "  let x = document.getElementById('x').value;";
-  page += "  let y = document.getElementById('y').value;";
-  page += "  document.getElementById('angle').textContent = x;";
-  page += "  let cmd = { servoX: x, servoY: y, intercepted: intercepted, mode: mode, light: light };";
+  page += "  let x = document.getElementById('x') ? document.getElementById('x').value : 0;";
+  page += "  let y = document.getElementById('y') ? document.getElementById('y').value : 0;";
+  // У цьому інтерфейсі ми обробляємо дані через джойстик, тому WebSocket надсилається окремо:
+  page += "  let cmd = { servoX: angle, servoY: speed, intercepted: intercepted, mode: mode, light: light };";
   page += "  socket.send(JSON.stringify(cmd));";
   page += "}";
   
-  // При зміні значень слайдерів викликаємо send()
-  page += "document.getElementById('x').oninput = send;";
-  page += "document.getElementById('y').oninput = send;";
-
-  // Кнопкові функції
+  // Обробка функцій для кнопок управління (зміна станів)
   page += "function toggleControl() { intercepted = !intercepted; ";
   page += "  document.getElementById('btnControl').innerText = intercepted ? 'Відняти управління' : 'Перехопити управління'; send(); }";
-  page += "function toggleHold() { mode = (mode === 'SERVO_HOLD_ZERO') ? 'SERVO_SOFT' : 'SERVO_HOLD_ZERO'; send(); }";
-  page += "function toggleLight() { light = !light; send(); }";
-  page += "function toggleMode() { mode = (mode === 'SERVO_HARD') ? 'SERVO_SOFT' : 'SERVO_HARD'; send(); }";
+  page += "function toggleLight() { light = !light; document.getElementById('btnLight').innerText = light ? 'Світло ON' : 'Світло OFF'; send(); }";
+  
+  // Обробка overlay кнопок
+  page += "let lockState = false;";
+  page += "document.getElementById('lockButton').addEventListener('pointerdown', function(e) { e.stopPropagation(); }, {capture: true});";
+  page += "document.getElementById('lockButton').addEventListener('click', function(e) {";
+  page += "  e.stopPropagation();";
+  page += "  lockState = !lockState;";
+  page += "  this.textContent = lockState ? '🔒' : '🔓';";
+  page += "});";
+  
+  page += "let modeState = false;";
+  page += "document.getElementById('modeButton').addEventListener('pointerdown', function(e) { e.stopPropagation(); }, {capture: true});";
+  page += "document.getElementById('modeButton').addEventListener('click', function(e) {";
+  page += "  e.stopPropagation();";
+  page += "  modeState = !modeState;";
+  page += "  this.textContent = modeState ? '🚙!' : '🚙';";
+  page += "});";
+  
+  // Обробка слайдера множника
+  page += "document.getElementById('multiplierSlider').addEventListener('input', function() {";
+  page += "  multiplier = parseFloat(this.value);";
+  page += "  console.log('Множник:', multiplier);";
+  page += "});";
+  
+  // Обробка даних джойстика
+  page += "const joystickContainer = document.getElementById('joystickContainer');";
+  page += "const joystickDot = document.getElementById('joystickDot');";
+  page += "let dragging = false;";
+  page += "joystickContainer.addEventListener('pointerdown', function(e) {";
+  page += "  if (e.target !== joystickContainer) return;";
+  page += "  dragging = true;";
+  page += "  joystickContainer.setPointerCapture(e.pointerId);";
+  page += "  updateJoystick(e);";
+  page += "});";
+  page += "joystickContainer.addEventListener('pointermove', function(e) {";
+  page += "  if (dragging && e.target === joystickContainer) { updateJoystick(e); }";
+  page += "});";
+  page += "joystickContainer.addEventListener('pointerup', function(e) { dragging = false; });";
+  
+  // Центрування при подвійному кліку
+  page += "joystickContainer.addEventListener('dblclick', function(e) {";
+  page += "  const rect = joystickContainer.getBoundingClientRect();";
+  page += "  let centerX = rect.width / 2, centerY = rect.height / 2;";
+  page += "  joystickDot.style.left = centerX + 'px';";
+  page += "  joystickDot.style.top = centerY + 'px';";
+  page += "  angle = 90; speed = 0; updateDisplay();";
+  page += "  console.log('Джойстик центровано');";
+  page += "});";
+  
+  page += "function updateJoystick(e) {";
+  page += "  const rect = joystickContainer.getBoundingClientRect();";
+  page += "  let x = e.clientX - rect.left;";
+  page += "  let y = e.clientY - rect.top;";
+  page += "  x = Math.max(0, Math.min(rect.width, x));";
+  page += "  y = Math.max(0, Math.min(rect.height, y));";
+  page += "  joystickDot.style.left = x + 'px';";
+  page += "  joystickDot.style.top = y + 'px';";
+  page += "  angle = Math.round(minAngle + (x / rect.width) * (maxAngle - minAngle));";
+  page += "  speed = Math.round(((rect.height/2 - y) / (rect.height/2)) * 100 * multiplier);";
+  page += "  updateDisplay();";
+  page += "}";
+  
   page += "</script>";
-
   page += "</body></html>";
+  
   request->send(200, "text/html; charset=UTF-8", page);
- }
+}
 
 //
 void handleSettings(AsyncWebServerRequest *request) {
