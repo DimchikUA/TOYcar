@@ -210,7 +210,7 @@ void MotorUpdate(){
       currentSpeed = targetSpeed;  // Миттєве зменшення
 
      }
-      int pwmValue = map(currentSpeed, 0, 100, 0, 255);
+      int pwmValue = map(currentSpeed, 0, 100, 100, 255);
      if (forwardflag == 1){
       ledcWrite(PIN_MOTOR_IN1, pwmValue);
       ledcWrite(PIN_MOTOR_IN2, 0);
@@ -223,11 +223,17 @@ void MotorUpdate(){
 //
 void handleWebMotorControl() {
   // 🔧 Тут згодом реалізації логіки веб-керування двигуном
-    // ... код обробки команди ...
-  lastWebCommandTime = millis(); // Оновлюємо час при кожній дії
+  if (motorSpeed > 0 && forwardflag != 1 ) { 
+    MotorForward();
+    DEBUG_PRINTLN(" WEB ВПЕРЕД!");
+ } else if (motorSpeed < 0 && reverseflag != 1) { 
+    MotorReverse();
+    DEBUG_PRINTLN("WEB НАЗАД");
+    }
+
+    targetSpeed = abs(motorSpeed);
+    MotorUpdate();
  }
-
-
 
 //
 
@@ -450,6 +456,10 @@ void handleWEB(AsyncWebServerRequest *request) {
   page += "  speed = Math.round(((rect.height/2 - y) / (rect.height/2)) * 100 * multiplier);";
   page += "  updateDisplay();";
   page += "}";
+   // Періодичне надсилання "keep-alive" команд, щоб веб-режим не згасав
+  page +=" setInterval(function() {";
+  page +="  send();";
+  page +=" }, 1500);";
   
   page += "</script>";
   page += "</body></html>";
