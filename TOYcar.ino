@@ -460,7 +460,7 @@ void handleWEB(AsyncWebServerRequest *request) {
 //
 void handleSettings(AsyncWebServerRequest *request) {
   String page = "<h1>Налаштування</h1>";
-  //page += "<form action='/save' method='GET'>";
+  page += "<form action='/save' method="POST">";
   
       // Поля для введення значень змінних
   page += "Настройка серво: <input name='servang' type='number' step='0.1' value='" + String(currentServoAngle, 1) + "'><br>";
